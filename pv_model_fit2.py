@@ -1,21 +1,72 @@
+# ==================== 替换从这里开始 ====================
+# 只需要改这部分！其他全部保持师兄原代码不动！
+
 import pandas as pd
 import pvlib
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import numpy as np
-file_path = "陆丰明阳光伏站发电电量.xlsx"
-data = pd.read_excel(file_path, skiprows=1)
-data.columns = ['Date', 'Measured_Energy']
-data = data.dropna(subset=['Date', 'Measured_Energy'])
-def convert_date(x):
+
+# ==================== 【终极稳健版】只替换这部分 ====================
+import pandas as pd
+import numpy as np
+
+file_path = "陆峰明阳光伏发电站数据3.csv"   # 你的文件名
+
+# 第一步：直接读，不设任何假设
+df = pd.read_csv(file_path, header=None, encoding='utf-8', dtype=str)
+
+# 手动命名列
+df.columns = ['date_str', 'energy_str']
+
+# 第二步：超级容错地清洗电量列（解决 18109..6 这类问题）
+def clean_energy_value(x):
+    if pd.isna(x):
+        return np.nan
+    # 去掉空格、换行、逗号
+    s = str(x).replace(' ', '').replace(',', '').strip()
+    # 把多个小数点只保留第一个
+    if s.count('.') > 1:
+        parts = s.split('.')
+        s = parts[0] + '.' + ''.join(parts[1:])
+    # 如果变成空的或者全是点，就返回nan
+    if s == '' or s == '.':
+        return np.nan
     try:
-        return pd.Timestamp('1899-12-30') + pd.to_timedelta(int(float(x)), unit='D')
+        return float(s)
     except:
-        return pd.to_datetime(x, errors='coerce')
-data['Date'] = data['Date'].apply(convert_date)
-data = data.dropna(subset=['Date'])
-data = data.set_index('Date')
-data.index = data.index.normalize()  
+        return np.nan
+
+df['Measured_Energy'] = df['energy_str'].apply(clean_energy_value)
+
+# 第三步：解析中文日期（2025年10月1日）
+def parse_chinese_date(s):
+    try:
+        s = str(s).strip()
+        s = s.replace('年', '-').replace('月', '-').replace('日', '')
+        return pd.to_datetime(s, format='%Y-%m-%d')
+    except:
+        return pd.NaT
+
+df['Date'] = df['date_str'].apply(parse_chinese_date)
+
+# 第四步：去掉任何解析失败的行
+df = df.dropna(subset=['Date', 'Measured_Energy']).copy()
+df = df[['Date', 'Measured_Energy']].sort_values('Date')
+
+# 第五步：完全对齐你师兄原来的 data 格式（必须是 DataFrame + 列名 'Measured_Energy'）
+data = df.set_index('Date').copy()
+data = data[['Measured_Energy']]           # 确保只有这一列
+data.index = data.index.normalize()        # 去掉时分秒
+
+print(f"成功读取并清洗完成！共 {len(data)} 天有效数据")
+print(f"时间范围：{data.index.min().date()} 至 {data.index.max().date()}")
+print("已自动修复类似 '18109..6' 这类错误")
+# ==================================================================
+
+# —— 到这里结束！下面这行和师兄原来完全一样 ——
+# data 就是师兄原来通过 Excel 得到的结果
+# ==================== 替换到这里结束 ====================
 latitude = 31.0          # 纬度
 longitude = 121.0        # 经度
 tz = 'Asia/Shanghai'
@@ -67,13 +118,27 @@ print("=================================")
 plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
 
-plt.figure(figsize=(10,5))
+# ==================== 画图 + 万能显示（替换你原来的画图代码）===================
+plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']
+plt.rcParams['axes.unicode_minus'] = False
+
+plt.figure(figsize=(12, 6))
 plt.plot(merged.index, merged['Measured_kWh'], label='实测发电量', color='blue', linewidth=2)
-plt.plot(merged.index, merged['Simulated_kWh'], label=f'模型预测发电量 (A={A_total:,}m²)', color='red', linestyle='--')
-plt.title("光伏发电模型 vs 实测发电量（陆丰明阳光伏站）")
-plt.xlabel("日期")
-plt.ylabel("日发电量 (kWh)")
-plt.legend()
-plt.grid(True)
+plt.plot(merged.index, merged['Simulated_kWh'], label=f'模型预测发电量 (A={A_total:,}m²)', 
+         color='red', linestyle='--', linewidth=2)
+plt.title("光伏发电模型 vs 实测发电量（陆丰明阳光伏站）", fontsize=16)
+plt.xlabel("日期", fontsize=12)
+plt.ylabel("日发电量 (kWh)", fontsize=12)
+plt.legend(fontsize=12)
+plt.grid(True, alpha=0.3)
 plt.tight_layout()
-plt.show()
+
+# 万能保存 + 万能显示（关键！）
+plt.savefig("拟合结果.png", dpi=300, bbox_inches='tight')
+print("图片已保存：拟合结果.png")
+
+# 下面这三行选一行就行（根据你的环境）
+# 1. 如果你在 Jupyter / OpenBayes → 用这个：
+from IPython.display import display, Image
+display(Image("拟合结果.png"))
+
